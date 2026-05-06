@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{f32dc81f-4f67-4f52-90bb-7a19f152f6b9}</ProjectGuid>
+    <RootNamespace>G3MPFHook</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>$(ProjectDir)gothic3sdk\g3\SharedBase\include\;$(ProjectDir)gothic3sdk\g3\Engine\include\;$(ProjectDir)gothic3sdk\g3\Game\include\;$(ProjectDir)gothic3sdk\g3\FileSystem\include\;$(ProjectDir)gothic3sdk\g3\GFC\include\;$(ProjectDir)gothic3sdk\g3\GUI\include\;$(ProjectDir)gothic3sdk\g3\Importer\include\;$(ProjectDir)gothic3sdk\g3\Script\include\;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86;$(LibraryPath);$(ProjectDir)gothic3sdk\g3\Game\lib;$(ProjectDir)gothic3sdk\g3\Engine\lib;$(ProjectDir)gothic3sdk\g3\FileSystem\lib;$(ProjectDir)gothic3sdk\g3\GFC\lib;$(ProjectDir)gothic3sdk\g3\Importer\lib;$(ProjectDir)gothic3sdk\g3\Script\lib;$(ProjectDir)gothic3sdk\g3\SharedBase\lib;$(ProjectDir)gothic3sdk\g3\GUI\lib</LibraryPath>
+    <OutDir>$(SolutionDir)bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)build\$(Configuration)\</IntDir>
+    <ExternalIncludePath>$(DXSDK_DIR)Include;$(ExternalIncludePath)</ExternalIncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>$(ProjectDir)gothic3sdk\g3\SharedBase\include\;$(ProjectDir)gothic3sdk\g3\Engine\include\;$(ProjectDir)gothic3sdk\g3\Game\include\;$(ProjectDir)gothic3sdk\g3\FileSystem\include\;$(ProjectDir)gothic3sdk\g3\GFC\include\;$(ProjectDir)gothic3sdk\g3\GUI\include\;$(ProjectDir)gothic3sdk\g3\Importer\include\;$(ProjectDir)gothic3sdk\g3\Script\include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86;$(LibraryPath);$(ProjectDir)gothic3sdk\g3\Game\lib;$(ProjectDir)gothic3sdk\g3\Engine\lib;$(ProjectDir)gothic3sdk\g3\FileSystem\lib;$(ProjectDir)gothic3sdk\g3\GFC\lib;$(ProjectDir)gothic3sdk\g3\Importer\lib;$(ProjectDir)gothic3sdk\g3\Script\lib;$(ProjectDir)gothic3sdk\g3\SharedBase\lib;$(ProjectDir)gothic3sdk\g3\GUI\lib</LibraryPath>
+    <OutDir>$(SolutionDir)bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)build\$(Configuration)\</IntDir>
+    <ExternalIncludePath>$(DXSDK_DIR)Include;$(ExternalIncludePath)</ExternalIncludePath>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;G3MPFHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir)gothic3sdk\g3\SharedBase\include;$(ProjectDir)gothic3sdk\g3\SharedBase\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Engine\include;$(ProjectDir)gothic3sdk\g3\Engine\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Game\include;$(ProjectDir)gothic3sdk\g3\Game\include\g3sdk;$(ProjectDir)gothic3sdk\g3\FileSystem\include;$(ProjectDir)gothic3sdk\g3\FileSystem\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GFC\include;$(ProjectDir)gothic3sdk\g3\GFC\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GUI\include;$(ProjectDir)gothic3sdk\g3\GUI\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Importer\include;$(ProjectDir)gothic3sdk\g3\Importer\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Script\include\;$(ProjectDir)gothic3sdk\g3\Script\include\g3sdk;$(ProjectDir);$(DXSDK_DIR)Include</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:twoPhase- /wd4251
+ %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib;user32.lib;advapi32.lib;d3dx9.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\SharedBase\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Engine\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Game\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\FileSystem\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\GFC\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\GUI\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Importer\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Script\lib</AdditionalLibraryDirectories>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;G3MPFHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir)gothic3sdk\g3\SharedBase\include;$(ProjectDir)gothic3sdk\g3\SharedBase\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Engine\include;$(ProjectDir)gothic3sdk\g3\Engine\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Game\include;$(ProjectDir)gothic3sdk\g3\Game\include\g3sdk;$(ProjectDir)gothic3sdk\g3\FileSystem\include;$(ProjectDir)gothic3sdk\g3\FileSystem\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GFC\include;$(ProjectDir)gothic3sdk\g3\GFC\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GUI\include;$(ProjectDir)gothic3sdk\g3\GUI\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Importer\include;$(ProjectDir)gothic3sdk\g3\Importer\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Script\include\;$(ProjectDir)gothic3sdk\g3\Script\include\g3sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:twoPhase- /wd4251
+ %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib;user32.lib;advapi32.lib;d3dx9.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\lib</AdditionalLibraryDirectories>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;G3MPFHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir)gothic3sdk\g3\SharedBase\include;$(ProjectDir)gothic3sdk\g3\SharedBase\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Engine\include;$(ProjectDir)gothic3sdk\g3\Engine\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Game\include;$(ProjectDir)gothic3sdk\g3\Game\include\g3sdk;$(ProjectDir)gothic3sdk\g3\FileSystem\include;$(ProjectDir)gothic3sdk\g3\FileSystem\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GFC\include;$(ProjectDir)gothic3sdk\g3\GFC\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GUI\include;$(ProjectDir)gothic3sdk\g3\GUI\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Importer\include;$(ProjectDir)gothic3sdk\g3\Importer\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Script\include\;$(ProjectDir)gothic3sdk\g3\Script\include\g3sdk;$(ProjectDir);$(DXSDK_DIR)Include</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:twoPhase- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\lib</AdditionalLibraryDirectories>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="src\d3doverlay.h" />
+    <ClInclude Include="src\detourmanager.h" />
+    <ClInclude Include="src\framework.h" />
+    <ClInclude Include="src\g3mmpinf.h" />
+    <ClInclude Include="src\g3mpfhook.h" />
+    <ClInclude Include="src\logger.h" />
+    <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\resource.h" />
+    <ClInclude Include="src\utils.h" />
+    <ClInclude Include="src\zmq_msg_struct.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="gothic3sdk\g3\Game\src\script\ge_scriptadmin.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="gothic3sdk\g3\Game\src\script\ge_scriptadminext.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\d3doverlay.cpp" />
+    <ClCompile Include="src\detourmanager.cpp" />
+    <ClCompile Include="src\dllmain.cpp" />
+    <ClCompile Include="src\g3mmpinf.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsCpp</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">CompileAsCpp</CompileAs>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\g3mpfhook.cpp" />
+    <ClCompile Include="src\hooks.cpp" />
+    <ClCompile Include="src\logger.cpp" />
+    <ClCompile Include="src\pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\utils.cpp" />
+    <ClCompile Include="src\zmq_msg_struct.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
