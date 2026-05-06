@@ -5,9 +5,6 @@
 This is a dynamic link library for Gothic 3 game, with features including but not limited to on-the-fly pack file mounting without game files modification and a feature-rich ImGui panel, making use of many engine features.
 It also provides mod debugging tools, such as template or quest preview.
 
-## Installation
-You can find the latest release in Release section.
-
 ## Usage
 Inject the DLL into the game process using any DLL injector. Menu panel can be accessed under F1.<br>
 To confirm the injection was successful, you should be able to see a "G3MPFHook ..." label on top of the game's main menu (visible only if injected before game window creation), and a notification should pop-up in top-left corner of the game window.
