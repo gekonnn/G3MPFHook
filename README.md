@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> This project is still WIP. Some core functionality may be missing, and it is not intended for general use yet.
+
 # G3MPFHook
 This is a dynamic link library for Gothic 3 game, with features including but not limited to on-the-fly pack file mounting without game files modification and a feature-rich ImGui panel, making use of many engine features.
 It also provides mod debugging tools, such as template or quest preview.
