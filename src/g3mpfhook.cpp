@@ -431,8 +431,10 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
                     ext_packfile_queue.push_back({ path, GetMountPoint(path) });
                 }
                 if (modf.TYPE == MODT_SCRIPT)
+                {
                     printf("add %s to queue\n", path.c_str());
                     ext_script_queue.push_back({ path });
+                }
                 if (modf.TYPE == MODT_INI) {
                     //std::string fileName = path.substr(path.find_last_of("/\\") + 1);
                     //if (ext_configFiles.find(fileName) == ext_configFiles.end())
