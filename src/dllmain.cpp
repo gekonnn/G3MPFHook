@@ -7,7 +7,7 @@ G3MPFHook* g3mpfhook;
 
 // messed up completely, ignore
 // todo: move it somewhere else bruh
-BOOL __declspec(dllexport) MountStringtable(const std::string& stPath)
+BOOL MountStringtable(const std::string& stPath)
 {
     printf("G3MPFHook] Mounting stringtable \"%s\"\n", stPath.c_str());
 
