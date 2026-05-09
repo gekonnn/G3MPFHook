@@ -78,7 +78,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib;user32.lib;advapi32.lib;d3dx9.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\SharedBase\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Engine\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Game\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\FileSystem\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\GFC\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\GUI\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Importer\lib;C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\gothic3sdk\g3\Script\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)gothic3sdk\g3\SharedBase\lib;$(ProjectDir)\gothic3sdk\g3\Engine\lib;$(ProjectDir)gothic3sdk\g3\Game\lib;$(ProjectDir)gothic3sdk\g3\FileSystem\lib;$(ProjectDir)gothic3sdk\g3\GFC\lib;$(ProjectDir)gothic3sdk\g3\GUI\lib;$(ProjectDir)gothic3sdk\g3\Importer\lib;$(ProjectDir)src\gothic3sdk\g3\Script\lib</AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
@@ -104,7 +104,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib;user32.lib;advapi32.lib;d3dx9.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\lib</AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
@@ -125,7 +124,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>Game.lib;Engine.lib;FileSystem.lib;GFC.lib;GUI.lib;Importer.lib;Script.lib;SharedBase.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\gekon\Documents\Projekty\CPP\G3MPFHook\src\lib</AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
