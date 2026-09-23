@@ -1,4 +1,7 @@
 #include "pch.h"
+#include "resource.h"
+
+#include <cmath>
 
 #define message_x 16
 #define message_y 16
@@ -26,10 +29,112 @@ namespace
     bool im_initialized = false;
     ImFont* im_font_body = NULL;
 
+    CreateDeviceEx_t oCreateDeviceEx = NULL;
     Present_t oPresent = NULL;
     WNDPROC oWndProc = NULL;
 
+    enum class StartupLogoPhase
+    {
+        Waiting,
+        Visible,
+        FadePending,
+        Fading,
+        Complete
+    };
+
+    struct StartupLogo
+    {
+        HMODULE module = NULL;
+        LPDIRECT3DDEVICE9 device = NULL;
+        LPDIRECT3DTEXTURE9 texture = NULL;
+        LPD3DXSPRITE sprite = NULL;
+        LPD3DXFONT font = NULL;
+        StartupLogoPhase phase = StartupLogoPhase::Waiting;
+        float pulsePhase = -1.5707963f;
+        std::chrono::steady_clock::time_point fadeStart;
+        std::string status;
+    } startup_logo;
+
+    bool game_input_blocked = false;
+    bool cursor_confined = false;
+
     const gCQuest_PS* selected_quest;
+
+    void ReleaseCursorConfinement()
+    {
+        if (!cursor_confined)
+            return;
+
+        ClipCursor(nullptr);
+        cursor_confined = false;
+    }
+
+    void UpdateCursorConfinement()
+    {
+        eCApplication& application = eCApplication::GetInstance();
+        HWND window = application.GetHandle();
+        gCSession& session = gCSession::GetInstance();
+        gCGUIManager* guiManager = session.GetGUIManager();
+
+        const bool shouldConfine =
+            window != nullptr &&
+            GetForegroundWindow() == window &&
+            !IsIconic(window) &&
+            session.IsGameRunning() &&
+            !session.IsPaused() &&
+            guiManager != nullptr &&
+            !guiManager->IsOpen() &&
+            !im_overlay_enabled;
+
+        if (!shouldConfine)
+        {
+            ReleaseCursorConfinement();
+            return;
+        }
+
+        RECT clientRect;
+        if (!GetClientRect(window, &clientRect))
+        {
+            ReleaseCursorConfinement();
+            return;
+        }
+
+        SetLastError(ERROR_SUCCESS);
+        const int mappedPixels = MapWindowPoints(
+            window, nullptr, reinterpret_cast<POINT*>(&clientRect), 2);
+        if (mappedPixels == 0 && GetLastError() != ERROR_SUCCESS)
+        {
+            ReleaseCursorConfinement();
+            return;
+        }
+
+        if (ClipCursor(&clientRect))
+        {
+            cursor_confined = true;
+            SetCursor(nullptr);
+        }
+    }
+
+    void SetGameInputBlocked(bool blocked)
+    {
+        if (game_input_blocked == blocked)
+            return;
+
+        eCActionMapper::GetInstance().ClearOccuredEvents();
+        game_input_blocked = blocked;
+    }
+
+    void UpdateGameInputCapture()
+    {
+        if (!im_initialized || !im_overlay_enabled)
+        {
+            SetGameInputBlocked(false);
+            return;
+        }
+
+        const ImGuiIO& io = ImGui::GetIO();
+        SetGameInputBlocked(io.WantCaptureMouse || io.WantCaptureKeyboard);
+    }
 
     struct ComInit
     {
@@ -37,30 +142,27 @@ namespace
         ~ComInit() { CoUninitialize(); }
     };
 
-    struct D3DDevice
+    struct GfxContextAdminAccess : eCGfxContextAdmin
     {
-        LPDIRECT3D9 pD3D = NULL;
-        LPDIRECT3DDEVICE9 pDevice = NULL;
+        static eCAPIDevice* GetAPIDevice() { return sGetAPIDevice(); }
     };
 
-    D3DDevice GetDummyDevice()
+    bool CaptureEngineDevice()
     {
-        D3DDevice device;
+        if (startup_logo.device)
+            return true;
 
-        device.pD3D = Direct3DCreate9(D3D_SDK_VERSION);
+        eCAPIDevice* apiDevice = GfxContextAdminAccess::GetAPIDevice();
+        if (!apiDevice)
+            return false;
 
-        D3DPRESENT_PARAMETERS params = {};
-        params.Windowed = TRUE;
-        params.SwapEffect = D3DSWAPEFFECT_DISCARD;
-        params.hDeviceWindow = GetForegroundWindow();
+        eCDX9Device* dx9Device = static_cast<eCDX9Device*>(apiDevice);
+        if (!dx9Device->m_pDevice)
+            return false;
 
-        HRESULT hr = device.pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
-            params.hDeviceWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device.pDevice);
-
-        if (device.pDevice)
-            device.pD3D->Release();
-
-        return device;
+        startup_logo.device = dx9Device->m_pDevice;
+        startup_logo.device->AddRef();
+        return true;
     }
 
     bool im_quest_filter(const char* filter, const gCQuest_PS* quest)
@@ -803,40 +905,183 @@ namespace
         ImGui::EndFrame();
         ImGui::Render();
         ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+
+        UpdateGameInputCapture();
     }
 }
 
 namespace D3DOverlay
 {
+    bool IsCapturingGameInput()
+    {
+        return game_input_blocked;
+    }
+
+    void ReleaseStartupLogoResources()
+    {
+        if (startup_logo.font)
+        {
+            startup_logo.font->Release();
+            startup_logo.font = NULL;
+        }
+        if (startup_logo.sprite)
+        {
+            startup_logo.sprite->Release();
+            startup_logo.sprite = NULL;
+        }
+        if (startup_logo.texture)
+        {
+            startup_logo.texture->Release();
+            startup_logo.texture = NULL;
+        }
+    }
+
+    void CompleteStartupLogo()
+    {
+        ReleaseStartupLogoResources();
+        if (startup_logo.device)
+        {
+            startup_logo.device->Release();
+            startup_logo.device = NULL;
+        }
+        startup_logo.status.clear();
+        startup_logo.phase = StartupLogoPhase::Complete;
+    }
+
+    bool EnsureStartupLogoResources()
+    {
+        if (!startup_logo.texture)
+        {
+            HRSRC resource = FindResourceW(startup_logo.module, MAKEINTRESOURCEW(IDR_G3MM_LOGO), RT_RCDATA);
+            if (!resource)
+                return false;
+
+            HGLOBAL loadedResource = LoadResource(startup_logo.module, resource);
+            const void* resourceData = loadedResource ? LockResource(loadedResource) : nullptr;
+            DWORD resourceSize = SizeofResource(startup_logo.module, resource);
+            if (!resourceData || !resourceSize || FAILED(D3DXCreateTextureFromFileInMemory(startup_logo.device, resourceData, resourceSize, &startup_logo.texture)))
+                return false;
+        }
+
+        if (!startup_logo.sprite && FAILED(D3DXCreateSprite(startup_logo.device, &startup_logo.sprite)))
+            return false;
+
+        if (!startup_logo.font && FAILED(D3DXCreateFontA(startup_logo.device, 15, 0, FW_SEMIBOLD, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI Semibold", &startup_logo.font)))
+            return false;
+
+        return true;
+    }
+
+    bool DrawStartupLogo(bool clearBackground = true, float alpha = 1.0f)
+    {
+        if (!EnsureStartupLogoResources())
+            return false;
+
+        D3DSURFACE_DESC backBufferDesc = {};
+        LPDIRECT3DSURFACE9 backBuffer = nullptr;
+        if (FAILED(startup_logo.device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+            return false;
+        backBuffer->GetDesc(&backBufferDesc);
+        backBuffer->Release();
+
+        D3DSURFACE_DESC textureDesc = {};
+        startup_logo.texture->GetLevelDesc(0, &textureDesc);
+
+        LPDIRECT3DSTATEBLOCK9 state = nullptr;
+        if (SUCCEEDED(startup_logo.device->CreateStateBlock(D3DSBT_ALL, &state)))
+            state->Capture();
+
+        HRESULT drawResult = startup_logo.device->BeginScene();
+        if (SUCCEEDED(drawResult))
+        {
+            if (clearBackground)
+                startup_logo.device->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+
+            const float logoSize = 32.0f;
+            const float padding = 20.0f;
+            const float scale = std::min(logoSize / textureDesc.Width, logoSize / textureDesc.Height);
+            D3DXVECTOR2 scaling(scale, scale);
+            D3DXVECTOR2 translation(padding, backBufferDesc.Height - textureDesc.Height * scale - padding);
+            D3DXMATRIX transform;
+            D3DXMatrixTransformation2D(&transform, nullptr, 0.0f, &scaling, nullptr, 0.0f, &translation);
+            startup_logo.sprite->SetTransform(&transform);
+            drawResult = startup_logo.sprite->Begin(D3DXSPRITE_ALPHABLEND);
+            if (SUCCEEDED(drawResult))
+            {
+                const bool fading = startup_logo.phase == StartupLogoPhase::Fading;
+                const float brightness = fading ? 1.0f : 0.75f + 0.25f * std::sin(startup_logo.pulsePhase);
+                const int color = static_cast<int>(255.0f * brightness);
+                if (!fading)
+                {
+                    startup_logo.pulsePhase += 0.65f;
+                    if (startup_logo.pulsePhase > 4.7123890f)
+                        startup_logo.pulsePhase -= 6.2831855f;
+                }
+                drawResult = startup_logo.sprite->Draw(startup_logo.texture, nullptr, nullptr, nullptr, D3DCOLOR_ARGB(static_cast<int>(255.0f * alpha), color, color, color));
+                startup_logo.sprite->End();
+
+                if (!startup_logo.status.empty())
+                {
+                    const LONG textLeft = static_cast<LONG>(padding + textureDesc.Width * scale + 12.0f);
+                    const LONG textCenter = static_cast<LONG>(translation.y + textureDesc.Height * scale * 0.5f);
+                    RECT textRect{ textLeft, textCenter - 16, static_cast<LONG>(backBufferDesc.Width - padding), textCenter + 16 };
+                    RECT shadowRect = textRect;
+                    OffsetRect(&shadowRect, 1, 1);
+                    //startup_logo.font->DrawTextA(nullptr, startup_logo.status.c_str(), -1, &shadowRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE, D3DCOLOR_ARGB(static_cast<int>(180.0f * alpha), 0, 0, 0));
+                    //startup_logo.font->DrawTextA(nullptr, startup_logo.status.c_str(), -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE, D3DCOLOR_ARGB(static_cast<int>(245.0f * alpha), 224, 220, 214));
+                }
+            }
+            startup_logo.device->EndScene();
+        }
+
+        if (state)
+        {
+            state->Apply();
+            state->Release();
+        }
+        if (FAILED(drawResult))
+            return false;
+
+        return true;
+    }
+
+    void SetStartupLogoStatus(const char* status)
+    {
+        startup_logo.status = status ? status : "";
+        if (startup_logo.phase == StartupLogoPhase::Complete || startup_logo.phase == StartupLogoPhase::FadePending || startup_logo.phase == StartupLogoPhase::Fading || !CaptureEngineDevice() || !startup_logo.module)
+            return;
+
+        if (DrawStartupLogo())
+        {
+            HRESULT result = oPresent ? oPresent(startup_logo.device, nullptr, nullptr, nullptr, nullptr) : startup_logo.device->Present(nullptr, nullptr, nullptr, nullptr);
+            if (SUCCEEDED(result))
+                startup_logo.phase = StartupLogoPhase::Visible;
+        }
+    }
+
+    void FadeOutStartupLogo()
+    {
+        if (startup_logo.phase == StartupLogoPhase::Visible)
+            startup_logo.phase = StartupLogoPhase::FadePending;
+        else if (startup_logo.phase == StartupLogoPhase::Waiting)
+            CompleteStartupLogo();
+    }
+
     DWORD WINAPI ThreadInit(PVOID pModule)
     {
-        D3DDevice device = GetDummyDevice();
-        if (!device.pD3D || !device.pDevice)
+        startup_logo.module = static_cast<HMODULE>(pModule);
+        LPDIRECT3D9EX d3dEx = nullptr;
+        if (FAILED(Direct3DCreate9Ex(D3D_SDK_VERSION, &d3dEx)) || !d3dEx)
             return FALSE;
 
-        void** vtable = *reinterpret_cast<void***>(device.pDevice);
-
-#if D3D_HK_ENDSCENE
-        oEndScene = (EndScene_t)vtable[42];
-        printf("oEndScene: %p\n", oEndScene);
-#endif
-
-#if D3D_HK_PRESENT
-        oPresent = (Present_t)vtable[17];
-        printf("oPresent: %p\n", oPresent);
-#endif
+        void** d3dExVtable = *reinterpret_cast<void***>(d3dEx);
+        oCreateDeviceEx = (CreateDeviceEx_t)d3dExVtable[20];
 
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
-#if D3D_HK_ENDSCENE
-        DetourAttach(&(PVOID&)oEndScene, hkEndScene);
-#endif
-#if D3D_HK_PRESENT
-        DetourAttach(&(PVOID&)oPresent, hkPresent);
-#endif
+        DetourAttach(&(PVOID&)oCreateDeviceEx, hkCreateDeviceEx);
         DetourTransactionCommit();
-
-        device.pD3D->Release();
+        d3dEx->Release();
 
         dbg_msg.x = alt_message_x;
         dbg_msg.y = alt_message_y;
@@ -875,19 +1120,7 @@ namespace D3DOverlay
             return;
 
         if (!m.dxFont)
-            D3DXCreateFontA(
-                dev,
-                m.height,
-                0,
-                FW_NORMAL,
-                1,
-                FALSE,
-                DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,
-                ANTIALIASED_QUALITY,
-                DEFAULT_PITCH | FF_DONTCARE,
-                m.font,
-                &m.dxFont);
+            D3DXCreateFontA(dev,m.height, 0, FW_NORMAL, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, m.font, &m.dxFont);
 
         auto now = std::chrono::steady_clock::now();
         float elapsed = std::chrono::duration<float>(now - m.start).count();
@@ -926,12 +1159,7 @@ namespace D3DOverlay
         int w = textRect.right - textRect.left;
         int h = textRect.bottom - textRect.top;
 
-        RECT drawRect{
-            m.x,
-            m.y,
-            m.x + w + m.padding * 2,
-            m.y + h + m.padding * 2
-        };
+        RECT drawRect{m.x, m.y, m.x + w + m.padding * 2, m.y + h + m.padding * 2 };
 
         LPDIRECT3DSTATEBLOCK9 state = nullptr;
         dev->CreateStateBlock(D3DSBT_ALL, &state);
@@ -976,11 +1204,26 @@ namespace D3DOverlay
     {
         ImGuiIO& io = ImGui::GetIO();
 
+        if (msg == WM_KILLFOCUS || (msg == WM_ACTIVATEAPP && wParam == FALSE))
+            ReleaseCursorConfinement();
+
+        if (msg == WM_SETCURSOR && cursor_confined)
+        {
+            SetCursor(nullptr);
+            return TRUE;
+        }
+
         if (msg == WM_KEYDOWN && wParam == IMGUI_OVERLAY_TOGGLE_KEY && !(lParam & (1 << 30)))
         {
             im_overlay_enabled = !im_overlay_enabled;
+            if (im_overlay_enabled)
+                ReleaseCursorConfinement();
+            UpdateGameInputCapture();
             return true;
         }
+
+        if (msg == WM_KEYUP && wParam == IMGUI_OVERLAY_TOGGLE_KEY)
+            return true;
 
         if (im_overlay_enabled)
         {
@@ -1008,6 +1251,9 @@ namespace D3DOverlay
                 }
 
                 ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, adjustedLParam);
+
+                if (io.WantCaptureMouse)
+                    return true;
             }
             else
             {
@@ -1021,6 +1267,8 @@ namespace D3DOverlay
                 case WM_RBUTTONUP:
                 case WM_MBUTTONDOWN:
                 case WM_MBUTTONUP:
+                case WM_XBUTTONDOWN:
+                case WM_XBUTTONUP:
                 case WM_MOUSEWHEEL:
                 case WM_MOUSEHWHEEL:
                     if (io.WantCaptureMouse)
@@ -1042,27 +1290,78 @@ namespace D3DOverlay
         return CallWindowProc(oWndProc, hWnd, msg, wParam, lParam);
     }
 
+    HRESULT __stdcall hkCreateDeviceEx(LPDIRECT3D9EX pD3D, UINT adapter, D3DDEVTYPE deviceType, HWND focusWindow, DWORD behaviorFlags, D3DPRESENT_PARAMETERS* params, D3DDISPLAYMODEEX* fullscreenMode, LPDIRECT3DDEVICE9EX* device)
+    {
+        HRESULT result = oCreateDeviceEx(pD3D, adapter, deviceType, focusWindow, behaviorFlags, params, fullscreenMode, device);
+        if (FAILED(result) || !device || !*device)
+            return result;
+
+        if (!oPresent)
+        {
+            void** deviceVtable = *reinterpret_cast<void***>(*device);
+            oPresent = (Present_t)deviceVtable[17];
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
+            DetourAttach(&(PVOID&)oPresent, hkPresent);
+            DetourTransactionCommit();
+        }
+
+        if (!startup_logo.device)
+        {
+            startup_logo.device = *device;
+            startup_logo.device->AddRef();
+            SetStartupLogoStatus("Initializing");
+        }
+
+        return result;
+    }
+
     // called by eCDX9Device::SwapScreen at rva 0x9d2ab
     HRESULT __stdcall hkPresent(LPDIRECT3DDEVICE9 pDevice, const RECT* src, const RECT* dest, HWND hwnd, const RGNDATA* dirty)
     {
+        if (startup_logo.phase == StartupLogoPhase::Waiting && !startup_logo.device)
+        {
+            startup_logo.device = pDevice;
+            startup_logo.device->AddRef();
+            if (!startup_logo.status.empty())
+                startup_logo.phase = StartupLogoPhase::Visible;
+        }
+
+        if (startup_logo.phase == StartupLogoPhase::Visible)
+        {
+            DrawStartupLogo();
+            return oPresent(pDevice, src, dest, hwnd, dirty);
+        }
+
+        if (startup_logo.phase == StartupLogoPhase::FadePending)
+        {
+            startup_logo.phase = StartupLogoPhase::Fading;
+            startup_logo.fadeStart = std::chrono::steady_clock::now();
+        }
+
         if (!im_initialized)
             InitImGuiOverlay(pDevice, hwnd);
 
         if (im_overlay_enabled)
             DrawImGuiOverlay();
+        else
+            UpdateGameInputCapture();
 
-        //eCGUIModule::GetInstance().EnableInput(!im_overlay_enabled);
-        //eCDesktop::GetInstance().EnableInput(!im_overlay_enabled);
-        //gCSession::GetInstance().EnableInput(!im_overlay_enabled);
-
-        //eCActionMapper::GetInstance().EnableInput(!im_overlay_enabled);
-        //eCActionMapper::GetInstance().EnableDelegates(!im_overlay_enabled);
-        //gCGUIModule::GetInstance().EnableInput(!im_overlay_enabled);
-        //eCGUIModule::GetInstance().EnableInput(!im_overlay_enabled);
-        //eCDesktop::GetInstance().EnableInput(!im_overlay_enabled);
+        UpdateCursorConfinement();
 
         DrawScreenMessage(pDevice, dbg_msg);
-        DrawScreenMessage(pDevice, message);        
+        DrawScreenMessage(pDevice, message);
+
+        if (startup_logo.phase == StartupLogoPhase::Fading)
+        {
+            const float fadeDuration = 0.8f;
+            const float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - startup_logo.fadeStart).count();
+            const float alpha = std::clamp(1.0f - elapsed / fadeDuration, 0.0f, 1.0f);
+            if (alpha > 0.0f)
+                DrawStartupLogo(false, alpha);
+            else
+                CompleteStartupLogo();
+        }
 
         return oPresent(pDevice, src, dest, hwnd, dirty);
     }

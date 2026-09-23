@@ -11,13 +11,13 @@ BOOL __fastcall G3MPFHOOK_DEF_FUNC(MountPackFile)(void* thisPtr, void* edx, cons
 
     if (G3MPFHook::GetInstance()->GetPackFileGatherMode())
     {
-        printf("[MountPackFile] GATHER %s -> %s\n", param_2.GetText(), param_1.GetText());
+        //printf("[MountPackFile] GATHER %s -> %s\n", param_2.GetText(), param_1.GetText());
         G3MPFHook::GetInstance()->AddToPackFileQueue({ param_2.GetText(), param_1.GetText() });
     }
     else
     {
         result = G3MPFHOOK_ORIGINAL_FUNC(MountPackFile)(thisPtr, param_1, param_2);
-        printf("[MountPackFile] MOUNT %s %s -> %s\n", result ? "SUCCESS" : "ERROR", param_2.GetText(), param_1.GetText());
+        //printf("[MountPackFile] MOUNT %s %s -> %s\n", result ? "SUCCESS" : "ERROR", param_2.GetText(), param_1.GetText());
     }
 
     return result;
@@ -46,6 +46,7 @@ void __fastcall G3MPFHOOK_DEF_FUNC(SetRootPath)(void* thisPtr, void* edx, const 
     packfile_queue_merge.insert(packfile_queue_merge.end(), orig_packfile_queue.begin(), orig_packfile_queue.end());
     packfile_queue_merge.insert(packfile_queue_merge.end(), ext_packfile_queue.begin(), ext_packfile_queue.end());
 
+    D3DOverlay::SetStartupLogoStatus("mounting archives...");
     G3MPFHook::GetInstance()->MountPackFiles(packfile_queue_merge);
 #endif
 }
@@ -71,10 +72,13 @@ BOOL __fastcall G3MPFHOOK_DEF_FUNC(LoadAllScriptDLLs)(void* thisPtr, void* edx)
 {
     // printf("[hkLoadAllScriptDLLs] called\n");
 
+    D3DOverlay::SetStartupLogoStatus("loading scripts...");
+
     gCScriptAdminExt& scriptAdmin = GetScriptAdminExt();
 
     BOOL result = G3MPFHOOK_ORIGINAL_FUNC(LoadAllScriptDLLs)(thisPtr);
 
+    G3MPFHook::GetInstance()->CopyAllIniFilesInQueue();
     G3MPFHook::GetInstance()->LoadAllScriptDLLsInQueue();
 
     printf("[hkLoadAllScriptDLLs] Loaded modules:\n");
@@ -83,9 +87,36 @@ BOOL __fastcall G3MPFHOOK_DEF_FUNC(LoadAllScriptDLLs)(void* thisPtr, void* edx)
         printf(" - %s\n", pDll->m_strFileName.GetText());
     }
 
+    D3DOverlay::FadeOutStartupLogo();
     return result;
 }
 G3MPFHOOK_ASSIGN_DETOUR(LoadAllScriptDLLs);
+
+eCProcessibleElement::eEResult __fastcall G3MPFHOOK_DEF_FUNC(WorldDoLoadData)(gCWorld* thisPtr, void* edx, bCIStream& stream)
+{
+    D3DOverlay::SetStartupLogoStatus("loading sectors...");
+    eCProcessibleElement::eEResult result = G3MPFHOOK_ORIGINAL_FUNC(WorldDoLoadData)(thisPtr, stream);
+
+    if (static_cast<GEInt>(result) == 1)
+        G3MPFHook::GetInstance()->ImportWorldDataFiles(thisPtr);
+
+    return result;
+}
+G3MPFHOOK_ASSIGN_DETOUR(WorldDoLoadData);
+
+GEBool __fastcall G3MPFHOOK_DEF_FUNC(LocAdminRead)(eCLocAdmin* thisPtr, void* edx)
+{
+    GEBool result = G3MPFHOOK_ORIGINAL_FUNC(LocAdminRead)(thisPtr);
+
+    if (result)
+    {
+        D3DOverlay::SetStartupLogoStatus("merging stringtables...");
+        G3MPFHook::GetInstance()->MergeAllStringtables(*thisPtr);
+    }
+
+    return result;
+}
+G3MPFHOOK_ASSIGN_DETOUR(LocAdminRead);
 
 // Add DLL text to the main manu
 void __fastcall G3MPFHOOK_DEF_FUNC(FUN_1008FC40)(CFFGFCView* gfcview)
@@ -129,61 +160,11 @@ HMODULE WINAPI G3MPFHOOK_DEF_FUNC(LoadLibraryA)(LPCSTR lpLibFileName)
 }
 G3MPFHOOK_ASSIGN_DETOUR(LoadLibraryA);
 
-eCEngineComponentBase* __fastcall G3MPFHOOK_DEF_FUNC(FindModule)(eCModuleAdmin* thisPtr, void* edx, const bCString& param_1)
-{
-    //printf("called, param1: %s\n", param_1);
-    return G3MPFHOOK_ORIGINAL_FUNC(FindModule)(thisPtr, param_1);
-}
-G3MPFHOOK_ASSIGN_DETOUR(FindModule);
-
-//bool __fastcall G3MPFHOOK_DEF_FUNC(ExecuteCallbackType)(bCMessageAdmin* thisPtr, void* edx, bEMessageCallbackPriority param_2, bEMessageTypes param_3, char* param_4, char* param_5, char* param_6, int param_7, int param_8)
-//{
-//    if (param_2 == 0)
-//    {
-//        Logger::LogIPC(LOG_INFO, param_4);
-//    }
-//
-//    //printf("Called!\n");
-//    //printf("param_1 = %p\n", thisPtr);
-//    //printf("param_2 = %d\n", (int)param_2);
-//    //printf("param_3 = %d\n", (int)param_3);
-//    //printf("param_4 = %s\n", param_4);
-//    //printf("param_5 = %s\n", param_5);
-//    //printf("param_6 = %s\n", param_6);
-//    //printf("param_7 = %d\n", param_7);
-//    //printf("param_8 = %d\n", param_8);
-//    
-//    return G3MPFHOOK_ORIGINAL_FUNC(ExecuteCallbackType)(thisPtr, param_2, param_3, param_4, param_5, param_6, param_7, param_8);
-//}
-//G3MPFHOOK_ASSIGN_DETOUR(ExecuteCallbackType);
-
-ULONGLONG __cdecl G3MPFHOOK_DEF_FUNC(FUN_1000d010)(void* param_1, CHAR param_2[MAX_PATH], unsigned int param_3)
-{
-    //printf("=================================================\n");
-    //printf("Called!\n");
-
-    //printf("param_1 dumpbytes:\n");
-    //Utils::dumpbytes((const char*)param_1, 64, 0, 16, true);
-
-    //printf("param_2 dumpbytes:\n");
-    //Utils::dumpbytes((const char*)param_2, 64, 0, 16, true);
-
-    //printf("param_3 = %p\n", &param_3);
-
-
-    //printf("param_3 dumpbytes:\n");
-    //Utils::dumpbytes((const char*)&param_3, 64, 0, 16, true);
-
-
-    return G3MPFHOOK_ORIGINAL_FUNC(FUN_1000d010)(param_1, param_2, param_3);
-}
-G3MPFHOOK_ASSIGN_DETOUR(FUN_1000d010);
-
 #define ENABLE_GAME_SPLASH 0 // todo: make this an option
 
 void __fastcall G3MPFHOOK_DEF_FUNC(CreateSplashImage)(eCApplication* thisPtr, void* edx)
 {
-    printf("CreateSplashImage called\n");
+    //printf("CreateSplashImage called\n");
 
 #if ENABLE_GAME_SPLASH
     G3MPFHOOK_ORIGINAL_FUNC(CreateSplashImage)(thisPtr);
@@ -193,18 +174,9 @@ void __fastcall G3MPFHOOK_DEF_FUNC(CreateSplashImage)(eCApplication* thisPtr, vo
 }
 G3MPFHOOK_ASSIGN_DETOUR(CreateSplashImage);
 
-//CFFDirCacheEntry* __fastcall G3MPFHOOK_DEF_FUNC(GetDirCacheEntry)(CFFFileSystemModule* thisPtr, void* edx, void* str)
-//{
-//    CFFDirCacheEntry* res = G3MPFHOOK_ORIGINAL_FUNC(GetDirCacheEntry)(thisPtr, str);
-//
-//    //printf("Called, res: %p\n", res);
-//
-//    //if (res)
-//    //{
-//    //    Utils::dumpbytes((char*)res, 128, 0, 16, true);
-//    //    G3MPFHook::GetInstance()->ThrowMessage("a");
-//    //}
-//
-//    return res;
-//}
-//G3MPFHOOK_ASSIGN_DETOUR(GetDirCacheEntry);
+void __fastcall G3MPFHOOK_DEF_FUNC(InputDispatch)(eCInputDispatcher* thisPtr, void* edx)
+{
+    if (!D3DOverlay::IsCapturingGameInput())
+        G3MPFHOOK_ORIGINAL_FUNC(InputDispatch)(thisPtr);
+}
+G3MPFHOOK_ASSIGN_DETOUR(InputDispatch);

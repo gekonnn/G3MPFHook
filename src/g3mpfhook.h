@@ -44,6 +44,11 @@ public:
 	__declspec(dllexport) BOOL LoadScriptDLL(const std::string& scriptPath);
 	void LoadAllScriptDLLsInQueue();
 
+	void CopyAllIniFilesInQueue();
+	bool CopyIniToGameVfs(const std::string& iniPath);
+	void ImportWorldDataFiles(gCWorld* world);
+	void MergeAllStringtables(eCLocAdmin& locAdmin);
+
 	__declspec(dllexport) void ThrowMessage(const std::string& text, UINT uType = MB_ICONINFORMATION, LogLevel lv = LOG_INFO);
 	__declspec(dllexport) void ThrowCriticalError(const std::string& text, bool _exit = true, UINT uType = MB_ICONERROR);
 
@@ -71,6 +76,9 @@ private:
 	std::vector<PackFile> orig_packfile_queue;
 	std::vector<PackFile> ext_packfile_queue;
 	std::vector<std::string> ext_script_queue;
+	std::vector<std::string> ext_ini_queue;
+	std::vector<std::string> ext_wrldatasc_queue;
+	std::vector<std::string> ext_stringtable_queue;
 
 	bool fLoadLibraryA_takeCustomDll = false;
 	std::string fLoadLibraryA_customDllPath;

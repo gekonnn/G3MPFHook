@@ -9,9 +9,9 @@ DetourManager& DetourManager::GetInstance()
 bool DetourManager::RegisterDetour(Detour detour)
 {
     uintptr_t addr = GetFunctionAddress(detour.module_name.c_str(), detour.rva, detour.export_name);
-    if (!addr)
+    if (addr == NULL)
     {
-        printf("[G3MPFHook] Failed to get function address!\n");
+        printf("[G3MPFHook] Failed to get function address for \"%s\" in module \"%s\"!\n", detour.func_name.c_str(), detour.module_name.c_str());
         return FALSE;
     }
 
@@ -22,17 +22,28 @@ bool DetourManager::RegisterDetour(Detour detour)
 
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
-    DetourAttach(detour.orig_func, detour.hook_func);
-
-	LONG commitRes = DetourTransactionCommit();
-    if (commitRes != NO_ERROR)
+    LONG attachRes = DetourAttach(detour.orig_func, detour.hook_func);
+    if (attachRes != NO_ERROR)
     {
-        Logger::LogIPC(LOG_ERROR, "Failed to detour \"%s\"", detour.func_name.c_str());
-        Logger::LogIPC(LOG_ERROR, "DetourTransactionCommit returned %ld", commitRes);
+        Logger::LogIPC(LOG_ERROR, "Failed to attach detour \"%s\" with error %ld (%s::%s@0x%p)", detour.func_name.c_str(), attachRes, detour.module_name.c_str(), detour.export_name, (void*)detour.rva);
+        DetourTransactionAbort();
         return FALSE;
     }
 
-    printf("[G3MPFHook] Hooked \"%s\" at RVA 0x%08x in module \"%s\"\n", detour.func_name.c_str(), detour.rva, detour.module_name.c_str());
+    LONG commitRes = DetourTransactionCommit();
+    if (commitRes != NO_ERROR)
+    {
+        printf("[G3MPFHook] Failed to detour \"%s\" at 0x%08x in module \"%s\", hook at 0x%08x\n", detour.func_name.c_str(), detour.rva, detour.module_name.c_str(), (uintptr_t)detour.hook_func);
+        Logger::LogIPC(LOG_ERROR, "Failed to commit detour \"%s\" with error %ld", detour.func_name.c_str(), commitRes);
+        return FALSE;
+    }
+
+    printf("[G3MPFHook] Hooked \"%s\" at 0x%08x in module \"%s", detour.func_name.c_str(), detour.rva, detour.module_name.c_str());
+    if (detour.export_name)
+        printf(", export: %s", detour.export_name);
+    else if (detour.rva)
+        printf(", RVA: 0x%08x", detour.rva);
+    printf(" -> hook at 0x%08x\n", (uintptr_t)detour.hook_func);
     m_registeredDetours.push_back(detour);
 
     return TRUE;
@@ -44,7 +55,9 @@ void DetourManager::SetupPredefDetours()
 #define G3MPFHOOK_DETOUR_ENTRY G3MPFHOOK_REGISTER_ONLY_ENTRY
 #undef G3MPFHOOK_DETOUR_ENTRY_PROC
 #define G3MPFHOOK_DETOUR_ENTRY_PROC G3MPFHOOK_REGISTER_ONLY_ENTRY_PROC
+    printf("[G3MPFHook] Setting up predefined detours...\n");
     G3MPFHOOK_DETOUR_LIST
+    printf("[G3MPFHook] Predefined detours setup complete\n");
 #undef G3MPFHOOK_DETOUR_ENTRY
 #undef G3MPFHOOK_DETOUR_ENTRY_PROC
 }
@@ -65,7 +78,7 @@ uintptr_t DetourManager::GetFunctionAddress(const char* moduleName, uintptr_t rv
 
     if (exportName) {
         uintptr_t addr = reinterpret_cast<uintptr_t>(GetProcAddress(module, exportName));
-        printf("%s::%s@0x%p\n", moduleName, exportName, (void*)addr);
+        //printf("%s::%s@0x%p\n", moduleName, exportName, (void*)addr);
         return addr;
     }
     else if (rva != 0) {
@@ -102,7 +115,4 @@ void DetourManager::DetachAllDetours()
 
 DetourManager::DetourManager() {}
 
-DetourManager::~DetourManager()
-{
-    DetachAllDetours();
-}
+DetourManager::~DetourManager() = default;

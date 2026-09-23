@@ -94,8 +94,10 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(ProjectDir)gothic3sdk\g3\SharedBase\include;$(ProjectDir)gothic3sdk\g3\SharedBase\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Engine\include;$(ProjectDir)gothic3sdk\g3\Engine\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Game\include;$(ProjectDir)gothic3sdk\g3\Game\include\g3sdk;$(ProjectDir)gothic3sdk\g3\FileSystem\include;$(ProjectDir)gothic3sdk\g3\FileSystem\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GFC\include;$(ProjectDir)gothic3sdk\g3\GFC\include\g3sdk;$(ProjectDir)gothic3sdk\g3\GUI\include;$(ProjectDir)gothic3sdk\g3\GUI\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Importer\include;$(ProjectDir)gothic3sdk\g3\Importer\include\g3sdk;$(ProjectDir)gothic3sdk\g3\Script\include\;$(ProjectDir)gothic3sdk\g3\Script\include\g3sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalOptions>/Zc:twoPhase- /wd4251
+      <AdditionalOptions>/Zc:twoPhase- /wd4251 /Zc:nrvo-
  %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -129,6 +131,12 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <ResourceCompile Include="G3MPFHook.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="src\resources\G3MM-512.png" />
+  </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\d3doverlay.h" />
     <ClInclude Include="src\detourmanager.h" />

@@ -15,6 +15,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="G3MPFHook.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="src\resources\G3MM-512.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="src\framework.h">
       <Filter>Header Files</Filter>
     </ClInclude>

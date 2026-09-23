@@ -5,19 +5,36 @@
 
 #include "pch.h"
 
-#define RVA_SetRootPath			0x29C350	// on detour calls MountPackFile
-#define RVA_MountPackFile		0xA180		// 0x1B70
-#define RVA_LoadScriptDLL		0x160C30	// debug
-#define RVA_LoadAllScriptDLLs	0x160A70	// on detour calls LoadScriptDLL
-#define RVA_ImportSector		0x19B580	// debug (for .wrldatasc)
-#define RVA_OnCreateWindow		0xBB90		// for window title mod
-#define RVA_FUN_1008fc40		0x8FC40		// Used for setting main menu window text (pb/cpt/sb v...), we detour it to add our own text
-#define RVA_AddDirToCache		0x29D830
-#define RVA_ReadFile			0x2A24B0	// eCConfigFile::ReadFile
-#define RVA_Open				0x29B220	// eCVirtualFile::Open
-#define RVA_FUN_1000d010		0xD010
-#define RVA_FUN_100083b0		0x83B0
-#define RVA_ExecuteCallbackType 0x29D60
+namespace Symbols
+{
+	namespace Engine {
+		inline constexpr char SetRootPath[]			= "?SetRootPath@eCVirtualFileSystem@@QAEXABVbCString@@@Z";						// eCVirtualFileSystem::SetRootPath(const bCString&)
+		inline constexpr char AddDirToCache[]		= "?AddDirToCache@eCVirtualFileSystem@@QAEIABVbCString@@AAI@Z";					// eCVirtualFileSystem::AddDirToCache(const bCString&, GEUInt&)
+		inline constexpr char LocAdminRead[]		= "?Read@eCLocAdmin@@QAE_NXZ";													// eCLocAdmin::Read()
+		inline constexpr char FindModule[]			= "?FindModule@eCModuleAdmin@@QBEPAVeCEngineComponentBase@@ABVbCString@@@Z";	// eCModuleAdmin::FindModule(const bCString&)
+		inline constexpr char CreateSplashScreen[]	= "?CreateSplashScreen@eCApplication@@SGXXZ";									// eCApplication::CreateSplashScreen()
+		inline constexpr char InputDispatch[]		= "?Dispatch@eCInputDispatcher@@UAEXXZ";									// eCInputDispatcher::Dispatch()
+	}
+
+	namespace Game {
+		inline constexpr char LoadAllScriptDLLs[]	= "?LoadAllScriptDLLs@gCScriptAdmin@@UAE_NXZ";										// gCScriptAdmin::LoadAllScriptDLLs()
+		inline constexpr char WorldDoLoadData[]		= "?DoLoadData@gCWorld@@MAE?AW4eEResult@eCProcessibleElement@@AAVbCIStream@@@Z";	// gCWorld::DoLoadData(bCIStream&)
+	}
+
+	namespace FileSystem {
+		inline constexpr char MountPackFile[] = "?MountPackFile@CFFFileSystemModule@@UAE_NABVbCString@@0@Z"; // CFFFileSystemModule::MountPackFile(const bCString&, const bCString&)
+	}
+
+	namespace Kernel32 {
+		inline constexpr char LoadLibraryA[] = "LoadLibraryA"; // LoadLibraryA(LPCSTR)
+	}
+}
+
+namespace RVA {
+	namespace Game {
+		inline constexpr uintptr_t FUN_1008FC40 = 0x8FC40;
+	}
+}
 
 struct Detour
 {
@@ -58,31 +75,31 @@ struct Detour
         reinterpret_cast<PVOID>(G3MPFHOOK_HOOKED_FUNC(FUNC_NAME)) };	\
     DetourManager::GetInstance().RegisterDetour(det##FUNC_NAME)
 
-#define G3MPFHOOK_REGISTER_ONLY_ENTRY(RVA, MODULE_NAME, RET_TYPE, CALL_CONV, FUNC_NAME, ...) \
+#define G3MPFHOOK_REGISTER_ONLY_ENTRY(RVA, MODULE_NAME, CALL_CONV, FUNC_NAME, RET_TYPE, ...) \
 	G3MPFHOOK_REGISTER_ONLY(RVA, MODULE_NAME, FUNC_NAME)
 
-#define G3MPFHOOK_DETOUR_ENTRY(RVA, MODULE_NAME, RET_TYPE, CALL_CONV, FUNC_NAME, ...) 	\
+#define G3MPFHOOK_DETOUR_ENTRY(RVA, MODULE_NAME, CALL_CONV, FUNC_NAME, RET_TYPE, ...) 	\
 	G3MPFHOOK_MAKE_DETOUR_FUNC(RET_TYPE, CALL_CONV, FUNC_NAME, __VA_ARGS__)
 
-#define G3MPFHOOK_REGISTER_ONLY_ENTRY_PROC(EXPORT_NAME, MODULE_NAME, RET_TYPE, CALL_CONV, FUNC_NAME, ...) \
+#define G3MPFHOOK_REGISTER_ONLY_ENTRY_PROC(EXPORT_NAME, MODULE_NAME, CALL_CONV, FUNC_NAME, RET_TYPE, ...) \
     G3MPFHOOK_REGISTER_ONLY_PROC(EXPORT_NAME, MODULE_NAME, FUNC_NAME)
 
-#define G3MPFHOOK_DETOUR_ENTRY_PROC(EXPORT_NAME, MODULE_NAME, RET_TYPE, CALL_CONV, FUNC_NAME, ...) \
+#define G3MPFHOOK_DETOUR_ENTRY_PROC(EXPORT_NAME, MODULE_NAME, CALL_CONV, FUNC_NAME, RET_TYPE, ...) \
     G3MPFHOOK_MAKE_DETOUR_FUNC(RET_TYPE, CALL_CONV, FUNC_NAME, __VA_ARGS__)
 
 #define G3MPFHOOK_DETOUR_LIST \
-    /*					   RVA								MODULE_NAME			RET_TYPE,				CALL_CONV,		FUNC_NAME,				... */												\
-	G3MPFHOOK_DETOUR_ENTRY(RVA_MountPackFile,				"FileSystem.dll",	BOOL,					__thiscall,		MountPackFile,			void*, const bCString&, const bCString&);			\
-	G3MPFHOOK_DETOUR_ENTRY(RVA_SetRootPath,					"Engine.dll",		void,					__thiscall,		SetRootPath,			void*, const bCString&);							\
-	G3MPFHOOK_DETOUR_ENTRY(RVA_AddDirToCache,				"Engine.dll",		GEUInt,					__thiscall,		AddDirToCache,			eCVirtualFileSystem*, const bCString&, GEUInt&);	\
-	G3MPFHOOK_DETOUR_ENTRY(RVA_LoadAllScriptDLLs,			"Game.dll",			BOOL,					__thiscall,		LoadAllScriptDLLs,		void*);												\
-	G3MPFHOOK_DETOUR_ENTRY(RVA_FUN_1008fc40,				"Game.dll",			void,					__fastcall,		FUN_1008FC40,			CFFGFCView*);										\
-	G3MPFHOOK_DETOUR_ENTRY(0x1d570,							"Engine.dll",		eCEngineComponentBase*,	__thiscall,		FindModule,				eCModuleAdmin*, const bCString&);					\
-	G3MPFHOOK_DETOUR_ENTRY(0xd010,							"FileSystem.dll",	ULONGLONG,				__cdecl,		FUN_1000d010,			void*, CHAR[MAX_PATH], unsigned int);				\
-	G3MPFHOOK_DETOUR_ENTRY(0xbaa0,							"Engine.dll",		void,					__thiscall,		CreateSplashImage,		eCApplication*);									\
-	G3MPFHOOK_DETOUR_ENTRY_PROC("LoadLibraryA",				"kernel32.dll",		HMODULE,				WINAPI,			LoadLibraryA,			LPCSTR);
-//	G3MPFHOOK_DETOUR_ENTRY(0xac20,							"FileSystem.dll",	CFFDirCacheEntry*,		__thiscall,		GetDirCacheEntry,		CFFFileSystemModule*, void*);						\
-//	G3MPFHOOK_DETOUR_ENTRY(RVA_ExecuteCallbackType,			"SharedBase.dll",	bool,			__thiscall,		ExecuteCallbackType,	bCMessageAdmin*, bEMessageCallbackPriority, bEMessageTypes, char*, char*, char*, int, int);
+    /*							SYM/RVA									MODULE_NAME			CALL_CONV		FUNC_NAME			RET_TYPE							... */												\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Engine::SetRootPath,			"Engine.dll",		__thiscall,		SetRootPath,		void,								void*, const bCString&);							\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Engine::AddDirToCache,		"Engine.dll",		__thiscall,		AddDirToCache,		GEUInt,								eCVirtualFileSystem*, const bCString&, GEUInt&);	\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Game::LoadAllScriptDLLs,		"Game.dll",			__thiscall,		LoadAllScriptDLLs,	BOOL,								void*);												\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Game::WorldDoLoadData,		"Game.dll",			__thiscall,		WorldDoLoadData,	eCProcessibleElement::eEResult, 	gCWorld*, bCIStream&);								\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Engine::LocAdminRead,			"Engine.dll",		__thiscall,		LocAdminRead,		GEBool,								eCLocAdmin*);										\
+	G3MPFHOOK_DETOUR_ENTRY		(RVA::Game::FUN_1008FC40,				"Game.dll",			__fastcall,		FUN_1008FC40,		void,								CFFGFCView*);										\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Engine::CreateSplashScreen,	"Engine.dll",		__thiscall,		CreateSplashImage,	void,								eCApplication*);									\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Engine::InputDispatch,		"Engine.dll",		__thiscall,		InputDispatch,		void,								eCInputDispatcher*);								\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::FileSystem::MountPackFile,	"FileSystem.dll",	__thiscall,		MountPackFile,		BOOL,								void*, const bCString&, const bCString&);			\
+	G3MPFHOOK_DETOUR_ENTRY_PROC	(Symbols::Kernel32::LoadLibraryA,		"kernel32.dll",		WINAPI,			LoadLibraryA,		HMODULE,							LPCSTR);											\
+	
 
 class DetourManager
 {

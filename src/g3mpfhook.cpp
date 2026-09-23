@@ -1,5 +1,10 @@
 #include "pch.h"
 
+#include <cctype>
+#include <cwctype>
+#include <filesystem>
+#include <string_view>
+
 static std::vector<std::string> archive_generations = { "pak", "cpt", "mod", "nod" };
 
 G3MPFHook* G3MPFHook::GetInstance()
@@ -97,7 +102,7 @@ g3mmmod_t G3MPFHook::DetectModFileType(std::string filepath)
         return MODT_SCRIPT;
     else if (fileName == "stringtable.ini")
         return MODT_STRINGTABLE;
-    else if (fileName == "test")
+    else if (fileExt == "wrldatasc")
         return MODT_LRTPLDATASC;
     else if (fileExt == "ini")
         return MODT_INI;
@@ -191,6 +196,8 @@ BOOL G3MPFHook::MountPackFiles(const std::vector<PackFile>& packFiles)
         mountorder.push_back({ mountpoint, files });
     }
 
+    int mounted = 0;
+
     for (auto& mount_pair : mountorder)
     {
         bCString mount_point(mount_pair.first.c_str());
@@ -202,12 +209,16 @@ BOOL G3MPFHook::MountPackFiles(const std::vector<PackFile>& packFiles)
 
             bCString pack_dir(packfile.path.c_str());
             BOOL success = MountPackFile(full_mountpoint, pack_dir);
+            if (success)
+                mounted++;
         }
 
         static GEUInt adddir_param_2 = 0;
 
         eCVirtualFileSystem::GetInstance().AddDirToCache(mount_point, adddir_param_2);
     }
+
+    Logger::LogIPC(LOG_INFO, "Mounted %d archives successfully", mounted);
 
     return TRUE;
 }
@@ -255,6 +266,21 @@ bool G3MPFHook::MountAllFilesInDirectory(std::string folder_path, bool gather)
                 LoadScriptDLL(filepath);
             break;
         }
+        case MODT_INI: {
+            if (gather)
+                ext_ini_queue.push_back({ filepath });
+            else
+                CopyIniToGameVfs(filepath);
+            break;
+        }
+        case MODT_LRTPLDATASC: {
+            ext_wrldatasc_queue.push_back(filepath);
+            break;
+        }
+        case MODT_STRINGTABLE: {
+            ext_stringtable_queue.push_back(filepath);
+            break;
+        }
         default: break;
         }
     } while (FindNextFileA(hFind, &ffd));
@@ -289,6 +315,314 @@ void G3MPFHook::LoadAllScriptDLLsInQueue()
         LoadScriptDLL(dll_path);
         it = ext_script_queue.erase(it);
     }
+}
+
+void G3MPFHook::CopyAllIniFilesInQueue()
+{
+    for (const std::string& iniPath : ext_ini_queue)
+    {
+        if (!CopyIniToGameVfs(iniPath))
+        {
+            Logger::LogIPC(
+                LOG_ERROR,
+                "Failed to copy INI \"%s\" into the game VFS",
+                iniPath.c_str());
+        }
+    }
+
+    ext_ini_queue.clear();
+}
+
+bool G3MPFHook::CopyIniToGameVfs(const std::string& iniPath)
+{
+    std::string destination =
+        "ini\\" + std::filesystem::path(iniPath).filename().string();
+
+    eCVirtualFileSystem& vfs = eCVirtualFileSystem::GetInstance();
+    bCString destinationPath(destination.c_str());
+
+    IFFVirtualFile* existing = vfs.CreateFileA(
+        destinationPath,
+        bEFileCreationMode_OpenExisting,
+        1);
+
+    if (existing)
+    {
+        existing->Release();
+        return true;
+    }
+
+    std::ifstream source(iniPath, std::ios::binary);
+    if (!source)
+        return false;
+
+    std::vector<char> contents{
+        std::istreambuf_iterator<char>(source),
+        std::istreambuf_iterator<char>()
+    };
+
+    IFFVirtualFile* file = vfs.CreateFileA(
+        destinationPath,
+        bEFileCreationMode_CreateAlways,
+        0);
+
+    if (!file)
+        return false;
+
+    GEU32 size = static_cast<GEU32>(contents.size());
+    bool success = size == 0 || file->Write(contents.data(), size) == size;
+
+    file->Release();
+    return success;
+}
+
+void G3MPFHook::ImportWorldDataFiles(gCWorld* world)
+{
+    auto trim = [](std::string value) {
+        auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c); });
+        auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char c) { return std::isspace(c); }).base();
+        return first < last ? std::string(first, last) : std::string();
+    };
+
+    for (const std::string& path : ext_wrldatasc_queue)
+    {
+        std::ifstream file(path);
+        if (!file)
+        {
+            Logger::LogIPC(LOG_ERROR, "Failed to read world data file \"%s\"", path.c_str());
+            continue;
+        }
+
+        bool sectorList = false;
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+            if (line.size() >= 3 && static_cast<unsigned char>(line[0]) == 0xEF && static_cast<unsigned char>(line[1]) == 0xBB && static_cast<unsigned char>(line[2]) == 0xBF)
+                line.erase(0, 3);
+
+            line = trim(line);
+
+            if (line.empty() || line.front() == ';' || line.front() == '#')
+                continue;
+
+            if (line.front() == '[')
+            {
+                sectorList = Utils::to_lower(line) == "[sector.list]";
+                continue;
+            }
+
+            if (!sectorList)
+                continue;
+
+            size_t separator = line.find('=');
+            if (separator == std::string::npos)
+                continue;
+
+            std::string sectorName = trim(line.substr(0, separator));
+            std::string value = Utils::to_lower(trim(line.substr(separator + 1)));
+            if (sectorName.empty())
+                continue;
+
+            bool enabled = value == "true" || value == "1" || value == "yes" || value == "on";
+            bCString sectorNameString(sectorName.c_str());
+            gCSector* sector = world->GetSector(sectorNameString);
+
+            if (!sector)
+                sector = world->ImportSector(sectorNameString);
+
+            if (!sector)
+            {
+                Logger::LogIPC(LOG_ERROR, "Failed to import sector \"%s\" from \"%s\"", sectorName.c_str(), path.c_str());
+                continue;
+            }
+
+            sector->Enable(enabled);
+            //Logger::LogIPC(LOG_INFO, "Applied sector \"%s\" from \"%s\"", sectorName.c_str(), path.c_str());
+        }
+    }
+}
+
+void G3MPFHook::MergeAllStringtables(eCLocAdmin& locAdmin)
+{
+    GEInt languageCount = locAdmin.GetLanguageCount();
+    std::vector<bCString> languages;
+    languages.reserve(languageCount);
+
+    for (GEInt i = 0; i < languageCount; ++i)
+        languages.push_back(locAdmin.FindLanguage(i));
+
+    auto trim = [](std::wstring_view value) {
+        while (!value.empty() && std::iswspace(value.front()))
+            value.remove_prefix(1);
+        while (!value.empty() && std::iswspace(value.back()))
+            value.remove_suffix(1);
+        return value;
+    };
+
+    ULONGLONG started = GetTickCount64();
+    size_t mergedFiles = 0;
+    size_t mergedIds = 0;
+    size_t mergedValues = 0;
+
+    for (const std::string& path : ext_stringtable_queue)
+    {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file)
+        {
+            Logger::LogIPC(LOG_ERROR, "Failed to read string table \"%s\"", path.c_str());
+            continue;
+        }
+
+        std::streamsize fileSize = file.tellg();
+        if (fileSize <= 0)
+        {
+            Logger::LogIPC(LOG_WARNING, "String table \"%s\" is empty", path.c_str());
+            continue;
+        }
+
+        file.seekg(0, std::ios::beg);
+
+        std::vector<unsigned char> bytes(static_cast<size_t>(fileSize));
+        if (fileSize > 0 && !file.read(reinterpret_cast<char*>(bytes.data()), fileSize))
+        {
+            Logger::LogIPC(LOG_ERROR, "Failed to read string table \"%s\"", path.c_str());
+            continue;
+        }
+
+        std::wstring contents;
+
+        if (bytes.size() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        {
+            contents.reserve((bytes.size() - 2) / 2);
+            for (size_t i = 2; i + 1 < bytes.size(); i += 2)
+                contents.push_back(static_cast<wchar_t>(bytes[i] | (bytes[i + 1] << 8)));
+        }
+        else if (bytes.size() >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+        {
+            contents.reserve((bytes.size() - 2) / 2);
+            for (size_t i = 2; i + 1 < bytes.size(); i += 2)
+                contents.push_back(static_cast<wchar_t>((bytes[i] << 8) | bytes[i + 1]));
+        }
+        else
+        {
+            size_t offset = bytes.size() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+            int byteCount = static_cast<int>(bytes.size() - offset);
+            int charCount = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, reinterpret_cast<const char*>(bytes.data() + offset), byteCount, nullptr, 0);
+            UINT codePage = CP_UTF8;
+            DWORD flags = MB_ERR_INVALID_CHARS;
+
+            if (charCount == 0 && byteCount != 0)
+            {
+                codePage = CP_ACP;
+                flags = 0;
+                charCount = MultiByteToWideChar(codePage, flags, reinterpret_cast<const char*>(bytes.data() + offset), byteCount, nullptr, 0);
+            }
+
+            if (charCount > 0)
+            {
+                contents.resize(charCount);
+                MultiByteToWideChar(codePage, flags, reinterpret_cast<const char*>(bytes.data() + offset), byteCount, contents.data(), charCount);
+            }
+        }
+
+        bool stringsSection = false;
+        size_t position = 0;
+        size_t fileIds = 0;
+        size_t fileValues = 0;
+
+        while (position <= contents.size())
+        {
+            size_t lineEnd = contents.find(L'\n', position);
+            if (lineEnd == std::wstring::npos)
+                lineEnd = contents.size();
+
+            std::wstring_view line(contents.data() + position, lineEnd - position);
+            line = trim(line);
+            position = lineEnd + 1;
+
+            if (line.empty() || line.front() == L';' || line.front() == L'#')
+                continue;
+
+            if (line.front() == L'[')
+            {
+                stringsSection = _wcsnicmp(line.data(), L"[LocAdmin_Strings]", line.size()) == 0 && line.size() == 18;
+                continue;
+            }
+
+            if (!stringsSection)
+                continue;
+
+            size_t separator = line.find(L'=');
+            if (separator == std::wstring_view::npos)
+                continue;
+
+            std::wstring_view keyView = trim(line.substr(0, separator));
+            std::wstring_view values = line.substr(separator + 1);
+            if (keyView.empty())
+                continue;
+
+            std::string key;
+            key.reserve(keyView.size());
+            bool validKey = true;
+
+            for (wchar_t character : keyView)
+            {
+                if (character > 0x7F)
+                {
+                    validKey = false;
+                    break;
+                }
+                key.push_back(static_cast<char>(character));
+            }
+
+            if (!validKey)
+                continue;
+
+            bCString stringId(key.c_str());
+            size_t fieldStart = 0;
+            size_t appliedForId = 0;
+
+            for (size_t languageIndex = 0; languageIndex < languages.size(); ++languageIndex)
+            {
+                size_t textEnd = values.find(L';', fieldStart);
+                if (textEnd == std::wstring_view::npos)
+                    textEnd = values.size();
+                std::wstring_view text = values.substr(fieldStart, textEnd - fieldStart);
+                fieldStart = textEnd < values.size() ? textEnd + 1 : values.size();
+
+                size_t directionEnd = values.find(L';', fieldStart);
+                if (directionEnd == std::wstring_view::npos)
+                    directionEnd = values.size();
+                std::wstring_view stageDirection = values.substr(fieldStart, directionEnd - fieldStart);
+                fieldStart = directionEnd < values.size() ? directionEnd + 1 : values.size();
+
+                if (text.empty())
+                    continue;
+
+                std::wstring textString(text);
+                std::wstring stageDirectionString(stageDirection);
+                eCLocTable::SEntry entry;
+                entry.Text = bCUnicodeString(textString.c_str());
+                entry.StageDirection = bCUnicodeString(stageDirectionString.c_str());
+
+                if (locAdmin.SetString(stringId, entry, languages[languageIndex]))
+                    ++appliedForId;
+            }
+
+            if (appliedForId != 0)
+            {
+                ++fileIds;
+                fileValues += appliedForId;
+            }
+        }
+
+        ++mergedFiles;
+        mergedIds += fileIds;
+        mergedValues += fileValues;
+    }
+
+    Logger::LogIPC(LOG_INFO, "Merged %u string tables: %u IDs, %u values in %u ms", static_cast<GEU32>(mergedFiles), static_cast<GEU32>(mergedIds), static_cast<GEU32>(mergedValues), static_cast<GEU32>(GetTickCount64() - started));
 }
 
 void G3MPFHook::ThrowMessage(const std::string& text, UINT uType, LogLevel lv)
@@ -407,10 +741,12 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
 
     if (pinf.INFO.SHOW_CONSOLE == 1)
     {
-        HWND hWnd = GetConsoleWindow();
-        if (hWnd != nullptr) {
-            ShowWindow(hWnd, SW_SHOW);
-        }
+        AllocConsole();
+
+        FILE* pCout;
+        freopen_s(&pCout, "CONOUT$", "w", stdout);
+        freopen_s(&pCout, "CONOUT$", "w", stderr);
+        freopen_s(&pCout, "CONIN$", "r", stdin);
     }
 
     game_path = std::string(pinf.INFO.GAME_PATH.DATA);
@@ -425,6 +761,8 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
                 g3mmmodf& modf = mod.FILE_ARRAY[j];
                 std::string path = std::string(modf.FILEPATH.DATA);
 
+                Logger::Log(LOG_WARNING, "Mod: %s, file: %s", mod.NAME.DATA, path.c_str());
+
                 if (modf.TYPE == MODT_ARCHIVE)
                 {
                     //printf("add %s to queue\n", path.c_str());
@@ -435,13 +773,17 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
                     printf("add %s to queue\n", path.c_str());
                     ext_script_queue.push_back({ path });
                 }
-                if (modf.TYPE == MODT_INI) {
-                    //std::string fileName = path.substr(path.find_last_of("/\\") + 1);
-                    //if (ext_configFiles.find(fileName) == ext_configFiles.end())
-                    //{
-                    //    ext_configFiles[fileName] = path;
-                    //    //printf("Added INI file %s = %s\n", fileName.c_str(), path.c_str());
-                    //}
+                if (modf.TYPE == MODT_INI)
+                {
+                    ext_ini_queue.push_back({ path });
+                }
+                if (modf.TYPE == MODT_LRTPLDATASC)
+                {
+                    ext_wrldatasc_queue.push_back({ path });
+                }
+                if (modf.TYPE == MODT_STRINGTABLE)
+                {
+                    ext_stringtable_queue.push_back({ path });
                 }
             }
         }
@@ -487,7 +829,7 @@ void G3MPFHook::g3mmpinf_ReadFromSharedMem()
     }
     else
     {
-        Logger::Log(LOG_WARNING, "[g3mmpinf_ReadFromSharedMem] Failed to read g3mmpinf from shared memory, using default struct.");
+        Logger::Log(LOG_WARNING, "[g3mmpinf_ReadFromSharedMem] failed to read g3mmpinf from shared memory");
     }
 }
 

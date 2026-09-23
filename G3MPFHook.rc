@@ -1,0 +1,3 @@
+#include "src\resource.h"
+
+IDR_G3MM_LOGO RCDATA "src\\resources\\G3MM-512.png"
