@@ -53,6 +53,7 @@ namespace
         float pulsePhase = -1.5707963f;
         std::chrono::steady_clock::time_point fadeStart;
         std::string status;
+        bool hasClearedOnce = false;
     } startup_logo;
 
     bool game_input_blocked = false;
@@ -1335,7 +1336,8 @@ namespace D3DOverlay
 
         if (startup_logo.phase == StartupLogoPhase::Visible)
         {
-            DrawStartupLogo();
+            DrawStartupLogo(!startup_logo.hasClearedOnce);
+            startup_logo.hasClearedOnce = true;
             return oPresent(pDevice, src, dest, hwnd, dirty);
         }
 
