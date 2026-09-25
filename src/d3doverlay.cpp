@@ -1013,7 +1013,13 @@ namespace D3DOverlay
                 const int color = static_cast<int>(255.0f * brightness);
                 if (!fading)
                 {
-                    startup_logo.pulsePhase += 0.65f;
+                    static auto lastPulseTime = std::chrono::steady_clock::now();
+                    auto now = std::chrono::steady_clock::now();
+                    const float dt = std::chrono::duration<float>(now - lastPulseTime).count();
+                    lastPulseTime = now;
+
+                    const float pulseSpeedRadPerSec = 2.5f;
+                    startup_logo.pulsePhase += pulseSpeedRadPerSec * dt;
                     if (startup_logo.pulsePhase > 4.7123890f)
                         startup_logo.pulsePhase -= 6.2831855f;
                 }
