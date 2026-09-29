@@ -13,44 +13,7 @@ G3MPFHook* G3MPFHook::GetInstance()
     return &instance;
 }
 
-G3MPFHook::G3MPFHook()
-{
-	zmq_connect_socket();
-}
-
-void G3MPFHook::PostInit(HMODULE hModule)
-{
-    this->hModule = hModule;
-
-    const HANDLE hD3D9Thread = CreateThread(nullptr, NULL, D3DOverlay::ThreadInit, hModule, NULL, nullptr);
-
-    Logger::LogIPC(LOG_INFO, "G3MPFHook injected successfully");
-    GE_MESSAGEF_INFO(5, (char*)"Hello from G3MPFHOOK!");
-
-    g3mmpinf_ReadFromSharedMem();
-
-    if (g3mmpinf_initialized(session_pinf)) {
-        Logger::LogIPC(LOG_INFO, "G3MMPINF read successfully");
-        if (session_pinf.VERSION != G3MMPINF_VER) {
-            ThrowMessage("G3MMPINF version mismatch!\n(received) 0x" + Utils::uint16_to_hex(session_pinf.VERSION) + " != 0x" + Utils::uint16_to_hex(G3MMPINF_VER), MB_ICONWARNING);
-        }
-    }
-    //else {
-    //    ThrowCriticalError("Failed to read G3MMPINF.", true);
-    //}
-
-    g3mmpinf_handle(session_pinf);
-
-    if (game_path.empty())
-        game_path = get_exec_directory();
-
-    if (!populate_mount_list())
-        ThrowCriticalError("Failed to populate mountlist from mountlist.ini", false);
-
-    DetourManager::GetInstance().SetupPredefDetours();
-
-    Logger::LogIPC(LOG_INFO, "All ready");
-}
+G3MPFHook::G3MPFHook() {}
 
 G3MPFHook::~G3MPFHook()
 {
@@ -59,9 +22,59 @@ G3MPFHook::~G3MPFHook()
     }
 }
 
+BOOL G3MPFHook::EarlyInit(HMODULE hModule)
+{
+    this->hModule = hModule;
+
+    g3mmpinf_read_from_shared_mem();
+    if (g3mmpinf_initialized(session_pinf)) {
+        Logger::LogIPC(LOG_INFO, "G3MMPINF read successfully");
+        if (session_pinf.VERSION != G3MMPINF_VER) {
+            ThrowMessage("G3MMPINF version mismatch!\n(received) 0x" + Utils::uint16_to_hex(session_pinf.VERSION) + " != 0x" + Utils::uint16_to_hex(G3MMPINF_VER), MB_ICONWARNING);
+        }
+    }
+    g3mmpinf_handle(session_pinf);
+
+    DetourManager::GetInstance().SetupPredefDetours();
+
+    Logger::LogIPC(LOG_INFO, "G3MPFHook injected successfully");
+    GE_MESSAGEF_INFO(5, (char*)"Hello from G3MPFHOOK!");
+
+    if (game_path.empty())
+        game_path = get_exec_directory();
+
+    if (!populate_mount_list())
+        ThrowCriticalError("Failed to populate mountlist from mountlist.ini", false);
+
+    Logger::LogIPC(LOG_INFO, "G3MPFHook::EarlyInit done");
+
+    return TRUE;
+}
+
+DWORD WINAPI G3MPFHook::LateInitThread(LPVOID param)
+{
+    G3MPFHook::GetInstance()->LateInit(static_cast<HMODULE>(param));
+
+    return TRUE;
+}
+
+void G3MPFHook::LateInit(HMODULE hModule)
+{
+    const HANDLE hD3D9Thread = CreateThread(nullptr, NULL, D3DOverlay::ThreadInit, hModule, NULL, nullptr);
+
+    Logger::LogIPC(LOG_INFO, "G3MPFHook::LateInit done");
+}
+
+DWORD __stdcall G3MPFHook::ConnectZMQThread(LPVOID param)
+{
+    G3MPFHook::GetInstance()->zmq_connect_socket();
+
+    return TRUE;
+}
+
 void G3MPFHook::zmq_send_message(zmq_msg_struct msg)
 {
-	if (!zmq_sock->handle())
+	if (!zmq_sock || !zmq_sock->handle())
 		return;
 
 	size_t outSize;
@@ -693,6 +706,21 @@ g3mmpinf G3MPFHook::get_pinf()
     return session_pinf;
 }
 
+void G3MPFHook::allocate_console()
+{
+    AllocConsole();
+
+    FILE* pCout;
+    freopen_s(&pCout, "CONOUT$", "w", stdout);
+    freopen_s(&pCout, "CONOUT$", "w", stderr);
+    freopen_s(&pCout, "CONIN$", "r", stdin);
+
+    DWORD consoleMode;
+    HANDLE outputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (GetConsoleMode(outputHandle, &consoleMode))
+        SetConsoleMode(outputHandle, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+}
+
 void G3MPFHook::zmq_connect_socket()
 {
 	zmq_ctx = new zmq::context_t(1);
@@ -741,12 +769,7 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
 
     if (pinf.INFO.SHOW_CONSOLE == 1)
     {
-        AllocConsole();
-
-        FILE* pCout;
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        freopen_s(&pCout, "CONOUT$", "w", stderr);
-        freopen_s(&pCout, "CONIN$", "r", stdin);
+        allocate_console();
     }
 
     game_path = std::string(pinf.INFO.GAME_PATH.DATA);
@@ -761,7 +784,7 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
                 g3mmmodf& modf = mod.FILE_ARRAY[j];
                 std::string path = std::string(modf.FILEPATH.DATA);
 
-                Logger::Log(LOG_WARNING, "Mod: %s, file: %s", mod.NAME.DATA, path.c_str());
+                //Logger::Log(LOG_WARNING, "Mod: %s, file: %s", mod.NAME.DATA, path.c_str());
 
                 if (modf.TYPE == MODT_ARCHIVE)
                 {
@@ -796,7 +819,7 @@ void G3MPFHook::g3mmpinf_handle(const g3mmpinf& pinf)
     }
 }
 
-void G3MPFHook::g3mmpinf_ReadFromSharedMem()
+void G3MPFHook::g3mmpinf_read_from_shared_mem()
 {
     HANDLE hMapFile = OpenFileMappingA(FILE_MAP_READ, FALSE, MAPPING_FILE_NAME);
 

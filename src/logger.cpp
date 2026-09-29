@@ -4,13 +4,6 @@ Logger* Logger::instancePtr = nullptr;
 
 Logger::Logger()
 {
-#ifdef OS_WINDOWS
-    DWORD consoleMode;
-    HANDLE outputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (GetConsoleMode(outputHandle, &consoleMode))
-        SetConsoleMode(outputHandle, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-#endif
-
     fopen_s(&m_logFile, "latest.log", "w+");
 }
 

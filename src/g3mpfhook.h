@@ -25,7 +25,12 @@ public:
 	G3MPFHook(const G3MPFHook&) = delete;
 	G3MPFHook& operator=(const G3MPFHook&) = delete;
 
-	void PostInit(HMODULE hModule);
+	BOOL EarlyInit(HMODULE hModule);
+
+	static DWORD WINAPI LateInitThread(LPVOID param);
+	void LateInit(HMODULE hModule);
+
+	static DWORD WINAPI ConnectZMQThread(LPVOID param);
 
 	void zmq_send_message(zmq_msg_struct msg);
 
@@ -69,8 +74,8 @@ public:
 private:
 	// we deliberately declare these zmq properties as pointers and never clean them, 
 	// otherwise we'd get "Successful WSASTARTUP not yet performed" crash.
-	zmq::context_t* zmq_ctx;
-	zmq::socket_t* zmq_sock;
+	zmq::context_t* zmq_ctx = nullptr;
+	zmq::socket_t* zmq_sock = nullptr;
 
 	bool gatherFiles = false;
 	std::vector<PackFile> orig_packfile_queue;
@@ -83,19 +88,20 @@ private:
 	bool fLoadLibraryA_takeCustomDll = false;
 	std::string fLoadLibraryA_customDllPath;
 
-	g3mmpinf session_pinf;
+	g3mmpinf session_pinf{};
 
 	std::vector<std::pair<std::string, std::string>> mountlist = {};
 
 	std::string game_path;
 
+	void allocate_console();
 	void zmq_connect_socket();
 
 	BOOL populate_mount_list();
 
 	bool g3mmpinf_initialized(const g3mmpinf& pinf);
 	void g3mmpinf_handle(const g3mmpinf& pinf);
-	void g3mmpinf_ReadFromSharedMem(); // read G3MMPINF from G3MM to fetch all mod files to be loaded
+	void g3mmpinf_read_from_shared_mem(); // read G3MMPINF from G3MM to fetch all mod files to be loaded
 
 	std::string get_exec_directory();
 
