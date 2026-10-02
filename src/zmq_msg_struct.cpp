@@ -18,7 +18,7 @@ static void read_bytes(char** ptr, void* dst, size_t size) {
 	*ptr += size;
 }
 
-static uint16_t read_uint32(char** ptr) {
+static uint32_t read_uint32(char** ptr) {
 	uint32_t val;
 	read_bytes(ptr, &val, sizeof(val));
 	return val;
