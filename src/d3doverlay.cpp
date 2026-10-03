@@ -978,6 +978,10 @@ namespace D3DOverlay
         if (!EnsureStartupLogoResources())
             return false;
 
+        if (auto* ppAdm = reinterpret_cast<eCPostProcessingAdmin*>(eCModuleAdmin::GetInstance().FindModule("eCPostProcessingAdmin")))
+            if (ppAdm->IsVideoPlaying())
+                return true;
+
         D3DSURFACE_DESC backBufferDesc = {};
         LPDIRECT3DSURFACE9 backBuffer = nullptr;
         if (FAILED(startup_logo.device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
